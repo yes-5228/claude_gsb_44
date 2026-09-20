@@ -280,6 +280,21 @@ ul.plain li { margin-bottom: 5px; }
 .kv dt { color: var(--text-muted); }
 .kv dd { margin: 0; }
 
+/* ---------- report center ---------- */
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 6px 0; }
+.span-wide { grid-column: 1 / -1; }
+.report-meta {
+  background: var(--panel-soft); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; display: flex; flex-direction: column; gap: 6px;
+}
+.report-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.report-meta-row .muted { font-size: 11.5px; }
+.report-table th, .report-table td { vertical-align: top; }
+.report-table tr.row-danger { background: #fff8f8; }
+.report-table tr.row-danger:hover { background: #fdeeee; }
+.report-verify { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.history-filters { padding: 4px 0; }
+
 @media (max-width: 900px) {
   .app { flex-direction: column; }
   .sidebar { width: 100%; flex: none; flex-direction: row; overflow-x: auto; align-items: center; padding: 10px; }

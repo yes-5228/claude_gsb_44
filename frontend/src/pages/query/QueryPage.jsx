@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { exportQueryUrl, queryMeasurements, queryStatistics } from '../../api/query.js'
 import { downloadFile } from '../../api/client.js'
 import Pagination from '../../components/common/Pagination.jsx'
@@ -29,10 +30,30 @@ const INITIAL_FILTERS = {
   max_value: ''
 }
 
+const FILTER_KEYS = [
+  'keyword', 'station_id', 'area', 'pollutant', 'period', 'is_exceeded',
+  'exceedance_status', 'data_source', 'date_from', 'date_to', 'min_value', 'max_value'
+]
+
+function filtersFromSearch(searchParams) {
+  const next = { ...INITIAL_FILTERS }
+  FILTER_KEYS.forEach((key) => {
+    const value = searchParams.get(key)
+    if (value !== null) next[key] = value
+  })
+  return next
+}
+
 export default function QueryPage() {
   const toast = useToast()
-  const query = useListQuery(queryMeasurements, INITIAL_FILTERS, { pageSize: 20 })
-  const [statsParams, setStatsParams] = useState({ group_by: 'pollutant', metric: 'avg' })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const fromReport = searchParams.get('from') === 'report'
+  const initialFilters = filtersFromSearch(searchParams)
+  const query = useListQuery(queryMeasurements, initialFilters, { pageSize: 20 })
+  const [statsParams, setStatsParams] = useState({
+    group_by: searchParams.get('group_by') || 'pollutant',
+    metric: searchParams.get('metric') || 'avg'
+  })
   const [exporting, setExporting] = useState(false)
 
   const statsLoader = useCallback(
@@ -47,6 +68,12 @@ export default function QueryPage() {
   useEffect(() => {
     stats.reload().catch(() => {})
   }, [stats.reload])
+
+  // 从报表核对跳转时, 保持地址栏参数与当前筛选同步, 用户调整后以页面条件为准
+  useEffect(() => {
+    setSearchParams({ ...query.filters, ...statsParams }, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleExport = async () => {
     setExporting(true)
@@ -63,6 +90,11 @@ export default function QueryPage() {
 
   return (
     <>
+      {fromReport ? (
+        <div className="alert alert-info">
+          已按报表统计条件自动填充筛选并执行因子聚合, 可逐项核对报表中的均值、极值、超标次数与达标率。
+        </div>
+      ) : null}
       <QueryFilters
         value={query.filters}
         loading={query.loading}
