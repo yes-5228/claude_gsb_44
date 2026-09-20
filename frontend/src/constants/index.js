@@ -3,7 +3,8 @@ export const NAV_ITEMS = [
   { to: '/stations', label: '监测点台账', icon: '📍', title: '监测点台账', subtitle: '维护监测点档案、点位信息与运行状态' },
   { to: '/measurements', label: '监测数据录入', icon: '✍️', title: '监测数据录入', subtitle: '按“监测点 + 时刻”成组录入各因子浓度' },
   { to: '/exceedances', label: '超标记录标注', icon: '⚠️', title: '超标记录标注', subtitle: '复核超标记录, 标注确认或忽略原因' },
-  { to: '/query', label: '数据查询', icon: '🔍', title: '数据查询', subtitle: '多条件检索、聚合统计与结果导出' }
+  { to: '/query', label: '数据查询', icon: '🔍', title: '数据查询', subtitle: '多条件检索、聚合统计与结果导出' },
+  { to: '/reports', label: '报表中心', icon: '📑', title: '报表中心', subtitle: '按日 / 周 / 月生成监测报表, 留存生成记录并可导出' }
 ]
 
 export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
@@ -26,3 +27,6 @@ export const POLLUTANT_CODE_LABELS = {
 }
 
 export const REFRESH_HINT = '数据来自 Flask 后端 /api 接口'
+
+export const REPORT_TYPE_TONE = { daily: 'info', weekly: 'primary', monthly: 'success' }
+export const REPORT_TYPE_LABELS = { daily: '日报', weekly: '周报', monthly: '月报' }

@@ -1,6 +1,6 @@
 # 空气监测点数据录入系统
 
-面向空气质量监测业务的**监测点台账 + 监测数据录入 + 超标记录标注 + 数据查询**一体化系统。
+面向空气质量监测业务的**监测点台账 + 监测数据录入 + 超标记录标注 + 数据查询 + 监测报表**一体化系统。
 后端使用 Flask + SQLAlchemy 以蓝图/服务分层组织, 前端使用 React + Vite 按业务模块拆分页面,
 超标判定严格依据 **GB 3095-2012《环境空气质量标准》二级浓度限值** 自动完成。
 
@@ -12,7 +12,15 @@
 | 监测点台账 | `/stations` | 台账增删改查、区域/类型/状态筛选、点位详情与分因子统计、级联清理关联数据 |
 | 监测数据录入 | `/measurements` | 按“监测点 + 时刻 + 周期”成组录入多因子浓度、超标校验预览、重复数据覆盖、录入结果回执 |
 | 超标记录标注 | `/exceedances` | 超标自动建单、单条/批量标注(确认 / 忽略 / 重置)、等级人工修正、标注留痕与统计 |
-| 数据查询 | `/query` | 多条件组合检索、聚合统计(按因子/站点/区域/日/月等)、分页浏览、CSV 导出 |
+| 数据查询 | `/query` | 多条件组合检索、聚合统计(按因子/站点/区域/日/月等)、分页浏览、CSV 导出; 支持从报表带筛选条件跳转核对 |
+| 报表中心 | `/reports` | 按**日 / 周 / 月**生成监测报表, 含各因子均值、极值(及出现时间/站点)、超标次数、达标率与首要污染物; 报表导出 CSV 并留存生成记录(快照) |
+
+报表中心设计要点:
+
+- **数字与查询页严格对齐**: 报表复用查询页同一套过滤条件解析(`query_service.parse_filters/apply_filters`)与 SQL 聚合表达式, 总数据量/超标次数/平均浓度取自查询页顶部统计口径, 各因子聚合取自查询页"按因子聚合", 达标率 = 1 − 超标率(超标率沿用 `round(超标数/样本数, 4)`)。
+- **快照留存**: 生成时把全部结果写入 `reports.content`(JSON), 之后数据变化不影响已生成报表; 记录列表支持类型/周期/关键字/时间筛选与删除。
+- **首要污染物**: 取有效因子中达标率最低(超标率最高)者; PM2.5/PM10 小时值无适用限值, 不参与排名; 全部达标时无首要污染物。
+- **可核对**: 报表详情提供"到查询页核对", 携带完全一致的周期、站点/区域、数据来源与数据周期条件跳转到数据查询页交叉验证。
 
 设计要点:
 
@@ -28,7 +36,7 @@
 | 数据库 | SQLite(默认, 零依赖) / PostgreSQL 16(可选, compose 覆盖文件) |
 | 前端 | React 18 · React Router 6 · Vite 7 · Axios · 原生 CSS(设计令牌 + 组件类) |
 | 部署 | Docker 多阶段构建 · Nginx 静态托管与 `/api` 反向代理 · docker compose |
-| 测试 | Pytest(43 个后端用例: 接口 + 领域规则) |
+| 测试 | Pytest(57 个后端用例: 接口 + 领域规则 + 报表口径对齐) |
 
 ## 目录结构
 
@@ -43,9 +51,9 @@
 │   │   ├── commands.py          # flask init-db / seed / reset-db / stats
 │   │   ├── seed.py              # 演示数据生成与启动引导
 │   │   ├── domain/              # 业务规则: 因子限值、枚举、超标分级
-│   │   ├── models/              # Station / Measurement / Exceedance
+│   │   ├── models/              # Station / Measurement / Exceedance / Report
 │   │   ├── services/            # 台账、录入、标注、查询统计业务逻辑
-│   │   ├── api/                 # 蓝图: meta / stations / measurements / exceedances / query
+│   │   ├── api/                 # 蓝图: meta / stations / measurements / exceedances / query / reports
 │   │   └── utils/               # 校验器、分页、CSV 导出
 │   ├── tests/                   # Pytest 用例
 │   ├── Dockerfile · docker-entrypoint.sh · requirements*.txt
@@ -56,7 +64,7 @@
 │   │   ├── components/          # layout(侧边栏/顶栏) 与 common(表格/分页/弹窗/表单等)
 │   │   ├── constants/           # 路由、标签与色板映射
 │   │   ├── hooks/               # useListQuery / useAsyncData / useOptions
-│   │   ├── pages/               # overview / stations / measurements / exceedances / query
+│   │   ├── pages/               # overview / stations / measurements / exceedances / query / reports
 │   │   ├── styles/global.css    # 设计令牌与公共样式
 │   │   └── utils/               # 时间/数值格式化、下载
 │   ├── Dockerfile · nginx.conf · vite.config.js
@@ -165,9 +173,13 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --buil
 | PATCH | `/api/exceedances/{id}` | 单条标注 |
 | POST | `/api/exceedances/annotations` | 批量标注 |
 | GET | `/api/exceedances/summary` | 超标统计(状态/等级/高发因子/站点排名) |
-| GET | `/api/query/measurements` | 高级条件检索 |
+| GET | `/api/query/measurements` | 高级条件检索(支持 URL 预置筛选, 供报表核对跳转) |
 | GET | `/api/query/statistics` | 聚合统计(`group_by` + `metric`) |
 | GET | `/api/query/export` | 查询结果导出 CSV |
+| GET/POST | `/api/reports` | 报表生成记录分页查询 / 生成日报·周报·月报(留存快照) |
+| GET/DELETE | `/api/reports/{id}` | 报表详情(含完整快照) / 删除生成记录 |
+| GET | `/api/reports/{id}/export` | 导出报表 CSV(概要 + 首要污染物 + 各因子统计 + 逐日明细) |
+| GET | `/api/reports/options` | 报表类型与数据周期选项 |
 
 `POST /api/measurements/entries` 请求示例:
 
@@ -207,6 +219,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --buil
 | `stations` | `code`(唯一) `name` `area` `station_type` `status` `longitude/latitude` `installed_at` | 监测点台账 |
 | `measurements` | `station_id` `pollutant` `period` `value` `limit_value` `exceed_ratio` `is_exceeded` `measured_at` `data_source` `recorder` | 监测数据; `(station_id, pollutant, period, measured_at)` 唯一 |
 | `exceedances` | `measurement_id`(唯一) `status` `level` `note` `annotator` `annotated_at` | 超标记录与人工标注 |
+| `reports` | `report_type`(daily/weekly/monthly) `period` `period_start/end` `total_count` `exceeded_count` `compliance_rate` `primary_pollutant` `content`(JSON 快照) | 监测报表生成记录 |
 
 删除监测点会级联清理其监测数据与超标记录; 删除监测数据会同时删除对应超标记录。
 
@@ -228,7 +241,7 @@ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d --buil
 
 ```bash
 cd backend
-python -m pytest -q          # 43 个用例: 台账 CRUD/级联、录入与超标判定、标注规则、查询统计与导出、元数据接口
+python -m pytest -q          # 57 个用例: 台账 CRUD/级联、录入与超标判定、标注规则、查询统计与导出、报表生成与口径对齐、元数据接口
 
 cd frontend
 npm run build                # 生产构建校验

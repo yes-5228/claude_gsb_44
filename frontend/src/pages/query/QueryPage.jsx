@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { exportQueryUrl, queryMeasurements, queryStatistics } from '../../api/query.js'
 import { downloadFile } from '../../api/client.js'
 import Pagination from '../../components/common/Pagination.jsx'
@@ -13,6 +14,11 @@ import { formatDateTime, formatNumber, formatPercent } from '../../utils/format.
 import QueryFilters from './components/QueryFilters.jsx'
 import QueryResultTable from './components/QueryResultTable.jsx'
 import StatisticsPanel from './components/StatisticsPanel.jsx'
+
+const FILTER_FIELDS = [
+  'keyword', 'station_id', 'area', 'pollutant', 'period', 'is_exceeded',
+  'exceedance_status', 'data_source', 'date_from', 'date_to', 'min_value', 'max_value'
+]
 
 const INITIAL_FILTERS = {
   keyword: '',
@@ -29,10 +35,28 @@ const INITIAL_FILTERS = {
   max_value: ''
 }
 
+/** 报表中心"到查询页核对": 从 URL 查询串还原与报表完全一致的筛选条件. */
+function filtersFromSearch(search) {
+  if (!search) return INITIAL_FILTERS
+  const params = new URLSearchParams(search)
+  const next = { ...INITIAL_FILTERS }
+  FILTER_FIELDS.forEach((key) => {
+    const value = params.get(key)
+    if (value !== null && value !== '') next[key] = value
+  })
+  return next
+}
+
 export default function QueryPage() {
   const toast = useToast()
-  const query = useListQuery(queryMeasurements, INITIAL_FILTERS, { pageSize: 20 })
-  const [statsParams, setStatsParams] = useState({ group_by: 'pollutant', metric: 'avg' })
+  const location = useLocation()
+  const initialFilters = filtersFromSearch(location.search)
+  const query = useListQuery(queryMeasurements, initialFilters, { pageSize: 20 })
+  const [statsParams, setStatsParams] = useState(() => {
+    const params = new URLSearchParams(location.search)
+    const groupBy = params.get('group_by')
+    return { group_by: groupBy || 'pollutant', metric: 'avg' }
+  })
   const [exporting, setExporting] = useState(false)
 
   const statsLoader = useCallback(
